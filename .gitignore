@@ -2,6 +2,7 @@ avocado
 compose
 logs/*
 mbs
+misc/.credentials.*
 mock/*
 modules/*
 repos/*
@@ -9,4 +10,6 @@ repos/*
 results/*
 rpmbuild
 src/*
+!src/fetch.sh
 tests/*
+!*/.keep
