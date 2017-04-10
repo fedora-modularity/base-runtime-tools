@@ -1,0 +1,12 @@
+avocado
+compose
+logs/*
+mbs
+mock/*
+modules/*
+repos/*
+!repos/syncrepos.sh
+results/*
+rpmbuild
+src/*
+tests/*
