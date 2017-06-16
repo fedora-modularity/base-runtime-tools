@@ -2,20 +2,28 @@
 use strict;
 use warnings;
 use File::Basename;
+use Sys::Hostname;
 
-open my $fh, '<', basename(__FILE__) . '/.credentials.docker'
+open my $fh, '<', dirname(__FILE__) . '/.credentials.docker'
     or die "Cannot read docker credentials!\n";
-<>; chomp;
-my ($dockeruser, $dockerpassword) = split ':', $_;
+$_ = <$fh>; chomp;
+my ($dockeruser, $dockerpassword) = split ':';
 close $fh;
 
-chdir '/home/build/tests/baseruntime-docker-tests'
-    or die "Cannot change directory!\n";
+my $dockerdir = '/home/build/tests/baseruntime-docker-tests';
+chdir $dockerdir or die "Cannot change directory!\n";
 
-my $output;
-my $sender = 'The Base Runtime Team <contyk@redhat.com>';
-# Default to self if no recipient is specified
-my $recipients = shift @ARGV // 'contyk@redhat.com';
+my $sender = 'The Base Runtime Team <rhel-next@redhat.com>';
+# Default to the team if no recipient is specified
+my $recipients = shift @ARGV // join(', ',
+    'mmcgrath@redhat.com',
+    'contyk@redhat.com',
+    'ignatenko@redhat.com',
+    'sgallagher@redhat.com',
+    'merlinm@redhat.com',
+    'bgoncalv@redhat.com',
+);
+my $hostname = hostname();
 my $mail = <<"EOF";
 Subject: [Base Runtime] Boltron Docker base image report
 From: ${sender}
@@ -39,44 +47,40 @@ Get it with and lists the installed packages with:
 
 __OUTPUT__
 
+---
+
+You can find logs online here: http://${hostname}/job-results/
+
 EOF
 
-my $result = 'Unknown';
 
-# TODO: Guess this should be tested
-qx/git pull -q/;
+my $module_lint = "/usr/share/moduleframework/tools/modulelint.py";
+my @steps = (
+  # [ test_success, save_output, command, fail_message, ],
+  [ 0, 0, "git pull -q", "Git pull failed", ],
+  [ 1, 1, "avocado run ./setup.py 2>&1", "Failed to build image", ],
+  [ 1, 1, "avocado run ./smoke.py ${module_lint} 2>&1", "Tests failed", ],
+  [ 1, 0, "docker login --username ${dockeruser} --password ${dockerpassword}", "Docker Hub login failed", ],
+  [ 1, 0, "docker tag base-runtime-smoke baseruntime/baseruntime", "Image tagging failed", ],
+  [ 1, 0, "docker push baseruntime/baseruntime", "Pushing to Docker Hub failed", ],
+  [ 0, 0, "docker rmi baseruntime/baseruntime", "Image cleanup failed", ],
+  [ 1, 1, "avocado run ./teardown.py 2>&1", "Cleanup failed", ],
+);
 
-$output = qx/avocado run .\/setup.py 2>&1/;
-if (($? >> 8) != 0) {
-    $result = 'Failed to build image';
-} else {
-    $output .= "\n" . qx/avocado run .\/smoke.py 2>&1/;
-    if (($? >> 8) != 0) {
-        $result = 'Tests failed';
-    } else {
-        qx/docker login --username ${dockeruser} --password ${dockerpassword}/;
-        if (($? >> 8) != 0) {
-            $result = 'Docker Hub login failed';
-        } else {
-            qx/docker tag base-runtime-smoke baseruntime\/baseruntime/;
-            if (($? >> 8) != 0) {
-                $result = 'Image tagging failed';
-            } else {
-                qx/docker push baseruntime\/baseruntime/;
-                if (($? >> 8) != 0) {
-                    $result = 'Pushing to Docker Hub failed';
-                } else {
-                    qx/docker rmi baseruntime\/baseruntime/;
-                    $output .= "\n" . qx/avocado run .\/teardown.py 2>&1/;
-                    if (($? >> 8) != 0) {
-                        $result = 'Cleanup failed';
-                    } else {
-                        $result = 'OK!';
-                    }
-                }
-            }
-        }
-    }
+my $result = 'OK!';
+my $output = '';
+
+foreach my $step (@steps) {
+  my ($test_success, $save_output, $command, $fail_message) = @$step;
+
+  my $out = qx/$command/;
+
+  $output .= $out . "\n" if $save_output;
+
+  if ($test_success && ($? >> 8) != 0) {
+    $result = $fail_message;
+    last;
+  }
 }
 
 $mail =~ s/__RESULT__/$result/;
