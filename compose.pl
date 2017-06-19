@@ -29,5 +29,4 @@ for my $pkg (@api) {
 }
 
 system 'createrepo_c', '--workers', 100, $ENV{HOME} . '/compose';
-# FIXME: This needs to be changed -- we need to include it in the list form
 system 'modifyrepo_c', '--mdtype=modules', $ENV{HOME} . '/modules/base-runtime/base-runtime.yaml', $ENV{HOME} . '/compose/repodata';
