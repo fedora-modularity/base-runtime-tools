@@ -57,7 +57,7 @@ EOF
 my $module_lint = "/usr/share/moduleframework/tools/modulelint.py";
 my @steps = (
   # [ test_success, save_output, command, fail_message, ],
-  [ 0, 0, "git pull -q", "Git pull failed", ],
+  [ 1, 1, "git pull -q 2>&1", "Git pull failed", ],
   [ 1, 1, "avocado run ./setup.py 2>&1", "Failed to build image", ],
   [ 1, 1, "avocado run ./smoke.py ${module_lint} 2>&1", "Tests failed", ],
   [ 1, 0, "docker login --username ${dockeruser} --password ${dockerpassword}", "Docker Hub login failed", ],
